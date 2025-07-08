@@ -19,7 +19,9 @@ compare_ranks <- function(
 ) {
   cat("Starting compare_ranks on", csv_file, "\n"); flush.console()
   
-  data <- read_csv(csv_file, show_col_types = FALSE)
+  data <- suppressMessages(
+    readr::read_csv(csv_file, show_col_types = FALSE)
+  )
   synergy_labels <- data$Synergy
   folder <- tools::file_path_sans_ext(basename(csv_file))
   dir.create(folder, showWarnings = FALSE)
@@ -243,14 +245,19 @@ compare_ranks <- function(
       file.path(folder, paste0("Combined_Ranks_", n, ".csv"))
     )
     
-    aucs <- purrr::map_dbl(names(methods), function(m) {
+    method_aucs  <- purrr::map_dbl(names(methods), function(m) {
       pred <- max(combined[[m]], na.rm = TRUE) + 1L - combined[[m]]
       auc(roc(labels, pred, quiet = TRUE))
     })
-    write_csv(
-      tibble(Method = names(methods), AUC = aucs),
-      file.path(folder, paste0("Method_AUC_", n, ".csv"))
+    feature_aucs <- purrr::map_dbl(feats, function(f) {
+      auc(roc(labels, sub[[f]], quiet = TRUE))
+    })
+    auc_df <- tibble(
+      Method = c(names(methods), feats),
+      AUC    = c(method_aucs,  feature_aucs)
     )
+    write_csv(auc_df, file.path(folder, paste0("Method_AUC_", n, ".csv")))
+    cat("→ Wrote Method_AUC_", n, ".csv\n", sep = "")
   }
   
   result <- bind_rows(all_rt, .id = "SampleSize") %>%
@@ -272,7 +279,11 @@ compare_ranks <- function(
 #Run Sanger1-5
 {fold_files <- paste0("Sanger_Fold", 1:5, ".csv")
 purrr::walk(fold_files, function(f) {
-  full_n <- nrow(readr::read_csv(f, show_col_types = FALSE))
+  full_n <- nrow(
+    suppressMessages(
+      readr::read_csv(f, show_col_types = FALSE)
+    )
+  )
   compare_ranks(f, sample_sizes = full_n)
 })}
 
